@@ -38,7 +38,7 @@ Issues relevant to this fork:
 - The launcher never installs or updates packages. Setup uses the reviewed hash-locked file.
 - Settings are validated, atomically replaced, and mode `0600`; no transcript is persisted.
 - Gemini, AI rewriting, response scraping, realtime voice, CLI command-file control, prompt editing, clipboard restoration, and unused dependencies were removed.
-- Subprocess invocation uses fixed argument arrays and a timeout. There is no shell evaluation or downloaded code execution.
+- Subprocess invocation uses fixed absolute executables, argument arrays, and timeouts. There is no shell evaluation or downloaded code execution. Automatic web-app launch accepts only a bundle under the user's Chrome Apps directory whose plist identifies Chrome and a `chatgpt.com` start URL.
 
 ## Dependency review
 
@@ -55,7 +55,7 @@ Direct runtime dependencies are limited to:
 Validation against this lockfile:
 
 - `pip-audit` reported **no known vulnerabilities** in the installed environment.
-- Bandit reported **no findings** after review-scoped suppressions for the fixed `/usr/bin/osascript` subprocess bridge (absolute executable, argument array, no shell, timeout).
+- Bandit reported **no findings** after review-scoped suppressions for the fixed `/usr/bin/osascript` and `/usr/bin/open` bridges (absolute executables, argument arrays, no shell, timeouts).
 - Ruff static checks passed.
 
 ## Required capabilities and revocation

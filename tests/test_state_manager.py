@@ -13,15 +13,21 @@ class StateStoreTests(unittest.TestCase):
             state = MicPipeStateStore(Path(directory) / "state.json").load()
         self.assertEqual(state["hotkey"], DEFAULT_HOTKEY)
         self.assertIsNone(state["chatgpt_window"])
+        self.assertIsNone(state["chatgpt_app_path"])
 
     def test_round_trip_and_private_mode(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "nested/state.json"
             store = MicPipeStateStore(path)
-            store.save("fn", (123, 1), False)
+            store.save("fn", (123, 1), "/example/ChatGPT.app", False)
             self.assertEqual(
                 store.load(),
-                {"hotkey": "fn", "chatgpt_window": (123, 1), "sound_enabled": False},
+                {
+                    "hotkey": "fn",
+                    "chatgpt_window": (123, 1),
+                    "chatgpt_app_path": "/example/ChatGPT.app",
+                    "sound_enabled": False,
+                },
             )
             self.assertEqual(os.stat(path).st_mode & 0o777, 0o600)
 
@@ -34,6 +40,7 @@ class StateStoreTests(unittest.TestCase):
             state = MicPipeStateStore(path).load()
         self.assertEqual(state["hotkey"], DEFAULT_HOTKEY)
         self.assertIsNone(state["chatgpt_window"])
+        self.assertIsNone(state["chatgpt_app_path"])
 
     def test_migrates_upstream_location_without_prompt_data(self):
         with tempfile.TemporaryDirectory() as directory:

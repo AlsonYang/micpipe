@@ -24,6 +24,7 @@ class MicPipeStateStore:
         default = {
             "hotkey": DEFAULT_HOTKEY,
             "chatgpt_window": None,
+            "chatgpt_app_path": None,
             "sound_enabled": True,
         }
         try:
@@ -50,18 +51,27 @@ class MicPipeStateStore:
             except (TypeError, ValueError):
                 pass
 
+        app_path = data.get("chatgpt_app_path")
+        if isinstance(app_path, str) and app_path:
+            default["chatgpt_app_path"] = app_path
+
         if isinstance(data.get("sound_enabled"), bool):
             default["sound_enabled"] = data["sound_enabled"]
         return default
 
     def save(
-        self, hotkey: str, chatgpt_window: tuple[int, int] | None, sound_enabled: bool
+        self,
+        hotkey: str,
+        chatgpt_window: tuple[int, int] | None,
+        chatgpt_app_path: str | None,
+        sound_enabled: bool,
     ) -> None:
         if hotkey not in HOTKEYS:
             raise ValueError("unsupported hotkey")
         payload = {
             "hotkey": hotkey,
             "chatgpt_window": list(chatgpt_window) if chatgpt_window else None,
+            "chatgpt_app_path": chatgpt_app_path,
             "sound_enabled": bool(sound_enabled),
         }
         self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)

@@ -17,6 +17,7 @@ from hotkey import DoubleTapDetector
 from paste_tool import paste_text, write_clipboard
 from session import SessionGuard, SessionState
 from state_manager import HOTKEYS, MicPipeStateStore
+from webapp import WebAppError, launch_chatgpt_web_app, validate_chatgpt_web_app
 from workflow import poll_for_transcript
 
 __version__ = "2.0.0"
@@ -46,6 +47,14 @@ class MicPipeApp(rumps.App):
             if settings["chatgpt_window"]
             else None
         )
+        try:
+            self.web_app_path = (
+                str(validate_chatgpt_web_app(settings["chatgpt_app_path"]))
+                if settings["chatgpt_app_path"]
+                else None
+            )
+        except WebAppError:
+            self.web_app_path = None
         self.sound_enabled = settings["sound_enabled"]
         # Rewrite validated/migrated settings immediately, dropping removed prompt data.
         self._save()
@@ -100,7 +109,7 @@ class MicPipeApp(rumps.App):
             if self.location
             else None
         )
-        self.store.save(self.hotkey, location, self.sound_enabled)
+        self.store.save(self.hotkey, location, self.web_app_path, self.sound_enabled)
 
     def bind_front_window(self, _sender=None) -> None:
         """Bind only the currently frontmost Chrome/PWA tab after strict host validation."""
@@ -199,6 +208,24 @@ class MicPipeApp(rumps.App):
         elif state is SessionState.STARTING:
             self.cancel()
 
+    def _ensure_bound_location(self) -> bool:
+        if self.location and self.chrome.is_location_alive(self.location):
+            return True
+        self.location = None
+        if not self.web_app_path:
+            return False
+
+        launch_chatgpt_web_app(self.web_app_path)
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            location = self.chrome.get_front_chatgpt_location()
+            if location:
+                self.location = location
+                self._save()
+                return True
+            time.sleep(self.POLL_SECONDS)
+        return False
+
     def _start_dictation(self) -> None:
         token = self.session.begin()
         if token is None:
@@ -206,21 +233,16 @@ class MicPipeApp(rumps.App):
         self._set_status("Starting…")
         self.target_app = NSWorkspace.sharedWorkspace().frontmostApplication()
 
-        if not self.location:
-            self.session.fail(token)
-            self._set_status("Ready")
-            rumps.notification(
-                "MicPipe",
-                "No ChatGPT window selected",
-                "Open the ChatGPT Chrome app, then choose Use Front ChatGPT Window.",
-            )
-            return
-
         try:
-            if not self.chrome.is_location_alive(self.location):
-                raise ChromeError(
-                    "The selected window is closed or no longer on chatgpt.com"
+            if not self._ensure_bound_location():
+                self.session.fail(token)
+                self._set_status("Ready")
+                rumps.notification(
+                    "MicPipe",
+                    "No ChatGPT window selected",
+                    "Configure/open the ChatGPT Chrome app, then choose Use Front ChatGPT Window.",
                 )
+                return
             ready = self.chrome.inspect_ready(self.location)
             if ready != "READY":
                 self._start_failure(token, ready)
@@ -242,7 +264,7 @@ class MicPipeApp(rumps.App):
                 time.sleep(self.POLL_SECONDS)
             if self.session.is_current(token, SessionState.STARTING):
                 self._start_failure(token, "recording state was not detected")
-        except ChromeError as exc:
+        except (ChromeError, WebAppError) as exc:
             self.session.fail(token)
             self._set_status("Ready")
             self._automation_error("Could not start dictation", exc)
@@ -441,9 +463,31 @@ def main() -> None:
         action="store_true",
         help="enable state/error diagnostics (never transcript text)",
     )
+    parser.add_argument(
+        "--set-chatgpt-app",
+        metavar="PATH",
+        help="validate and remember a Chrome-installed ChatGPT .app bundle",
+    )
     parser.add_argument("--version", action="version", version=f"MicPipe {__version__}")
     args = parser.parse_args()
     configure_logging(args.debug)
+
+    if args.set_chatgpt_app:
+        app_path = str(validate_chatgpt_web_app(args.set_chatgpt_app))
+        state_path = (
+            Path.home() / "Library/Application Support/MicPipe/micpipe_state.json"
+        )
+        store = MicPipeStateStore(state_path)
+        settings = store.load()
+        store.save(
+            settings["hotkey"],
+            settings["chatgpt_window"],
+            app_path,
+            settings["sound_enabled"],
+        )
+        print(f"Configured ChatGPT Chrome app: {app_path}")
+        return
+
     MicPipeApp(debug=args.debug).run_app()
 
 

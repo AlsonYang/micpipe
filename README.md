@@ -29,10 +29,10 @@ The hotkey is configurable from the menu-bar icon: either Option key (default), 
 
 1. Open `https://chatgpt.com` in Chrome and sign in.
 2. Use Chrome's **Install** icon in the address bar, or **⋮ → Cast, save, and share → Install page as app** (the wording varies by Chrome version).
-3. Name it `ChatGPT` and install it.
-4. Open that installed app and leave it on the normal ChatGPT composer page.
+3. Name it `ChatGPT` and install it. Chrome normally places it at `~/Applications/Chrome Apps.localized/ChatGPT.app` (a numeric suffix is possible).
+4. Open the installed app and leave it on the normal ChatGPT composer page.
 
-A normal dedicated Chrome window also works. The installed app is recommended because it is easier to keep isolated from unrelated browsing. MicPipe does not install a browser extension and does not create or export a separate browser profile.
+Once configured, MicPipe reopens that exact installed web app if its saved window no longer exists. A normal dedicated Chrome window also works, but must be rebound after it is closed. The installed app is recommended because it is easier to keep isolated from unrelated browsing. MicPipe does not install a browser extension and does not create or export a separate browser profile.
 
 ### 2. Install reviewed, locked dependencies
 
@@ -43,6 +43,14 @@ uv sync --frozen
 ```
 
 `uv.lock` pins package files and hashes. The normal launcher never installs or updates dependencies.
+
+Configure the installed app path:
+
+```bash
+uv run --frozen python micpipe.py --set-chatgpt-app "$HOME/Applications/Chrome Apps.localized/ChatGPT.app"
+```
+
+Adjust the path to the actual installed `.app` name if needed. MicPipe validates that the bundle is a Chrome web app pinned to `https://chatgpt.com`; arbitrary app paths are rejected.
 
 ### 3. Enable required permissions/settings
 
@@ -61,7 +69,7 @@ See [SECURITY.md](SECURITY.md#required-capabilities-and-revocation) for exact sc
 2. Click the MicPipe menu-bar icon.
 3. Choose **Use Front ChatGPT Window**.
 
-MicPipe stores only the Chrome window ID and tab index. It then refuses to execute page JavaScript if that tab leaves the exact `https://chatgpt.com` origin. If the installed app is recreated and its ID changes, bind it again.
+MicPipe stores the validated installed-app path plus the Chrome window ID and tab index. It refuses to execute page JavaScript if that tab leaves the exact `https://chatgpt.com` origin. If the installed app is recreated under a different path, run `--set-chatgpt-app` again.
 
 ## Launch and quit
 
