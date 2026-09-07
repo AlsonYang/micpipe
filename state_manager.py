@@ -1,154 +1,86 @@
+"""Small validated settings store. No transcript or clipboard data is persisted."""
+
+from __future__ import annotations
+
 import json
 import os
+import tempfile
+from pathlib import Path
+
+HOTKEYS = {
+    "option": ("Either Option (⌥ twice)", (58, 61)),
+    "left_option": ("Left Option (⌥ twice)", (58,)),
+    "right_option": ("Right Option (⌥ twice)", (61,)),
+    "fn": ("Fn (twice)", (63,)),
+}
+DEFAULT_HOTKEY = "option"
 
 
 class MicPipeStateStore:
-    # Supported hotkey options: (keycode, display_name)
-    # These are common keys used for voice input in various apps
-    HOTKEY_OPTIONS = [
-        (63, "Fn"),                    # Function key (default)
-        (58, "Right Option (⌥)"),      # Right Option/Alt
-        (61, "Left Option (⌥)"),       # Left Option/Alt
-        (60, "Left Shift (⇧)"),        # Left Shift
-        (56, "Right Shift (⇧)"),       # Right Shift
-    ]
+    def __init__(self, path: str | Path):
+        self.path = Path(path)
 
-    DEFAULT_TRIGGER_KEY = 63  # Fn key
-    DEFAULT_VOICE_IDLE_TIMEOUT_SECONDS = 20
+    def load(self) -> dict:
+        default = {
+            "hotkey": DEFAULT_HOTKEY,
+            "chatgpt_window": None,
+            "sound_enabled": True,
+        }
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except (OSError, ValueError, TypeError):
+            return default
 
-    DEFAULT_PIPE_SLOTS = [
-        {"title": "Basic Correction", "prompt": "Fix the following voice transcription: 1) Fix grammar errors, typos, and filler words; 2) Add proper punctuation; 3) Auto Format: standardize addresses, phone numbers, numbers, and times to their proper formats; 4) Auto Edit: if there are contradictions, keep the true intent based on context. Output only the corrected text:"},
-        {"title": "Polish Text", "prompt": "Polish and improve the following text and output only the result:"},
-        {"title": "Translate to English", "prompt": "Translate the following text to English and output only the translation:"},
-        {"title": "Vibe Coder", "prompt": "The following is a voice transcription of coding instructions. Please clean it up by: 1) removing filler words, hesitations and repetitions, 2) resolving any contradictions by keeping the latest intent, 3) organizing the ideas into clear, actionable instructions. Output a clean, well-structured prompt that a coding agent can directly use:"},
-        {"title": "Email Writer", "prompt": "Transform the following voice transcription into a professional email. Please: 1) Identify the key points and intent; 2) Structure it with appropriate greeting, body, and closing; 3) Use professional yet friendly tone; 4) Fix any grammar issues and remove filler words; 5) Keep it concise and clear. Output only the email content:"}
-    ]
+        hotkey = data.get("hotkey")
+        if hotkey in HOTKEYS:
+            default["hotkey"] = hotkey
+        elif data.get("trigger_key") in (58, 61):  # migrate upstream settings
+            default["hotkey"] = (
+                "left_option" if data["trigger_key"] == 58 else "right_option"
+            )
 
-
-    def __init__(self, path, logger=None):
-        self.path = path
-        self.logger = logger
-
-    def _log(self, msg):
-        if self.logger:
+        location = data.get("chatgpt_window")
+        if location is None:
+            location = (data.get("dedicated_windows") or {}).get("ChatGPT")
+        if isinstance(location, list) and len(location) == 2:
             try:
-                self.logger.debug(msg)
-            except Exception:
+                window_id, tab_index = map(int, location)
+                if window_id > 0 and tab_index > 0:
+                    default["chatgpt_window"] = (window_id, tab_index)
+            except (TypeError, ValueError):
                 pass
 
-    def load(self):
-        import copy
-        state = {
-            "current_service": "ChatGPT",
-            "sound_enabled": True,
-            "dedicated_windows": {"ChatGPT": None, "Gemini": None},
-            "trigger_key": self.DEFAULT_TRIGGER_KEY,
-            "voice_idle_timeout_seconds": self.DEFAULT_VOICE_IDLE_TIMEOUT_SECONDS,
-            "pipe_slots": copy.deepcopy(self.DEFAULT_PIPE_SLOTS),
-            "current_pipe_slot": -1,
-        }
-        try:
-            if not os.path.exists(self.path):
-                return state
-            with open(self.path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-        except Exception as e:
-            self._log(f"Failed to load state: {e}")
-            return state
-
-        service = data.get("current_service")
-        if service in ("ChatGPT", "Gemini"):
-            state["current_service"] = service
-
-        sound = data.get("sound_enabled")
-        if isinstance(sound, bool):
-            state["sound_enabled"] = sound
-
-        windows = data.get("dedicated_windows")
-        if isinstance(windows, dict):
-            for key in ("ChatGPT", "Gemini"):
-                loc = windows.get(key)
-                if isinstance(loc, list) and len(loc) == 2:
-                    try:
-                        win_id = int(loc[0])
-                        tab_idx = int(loc[1])
-                        if win_id > 0 and tab_idx > 0:
-                            state["dedicated_windows"][key] = (win_id, tab_idx)
-                    except Exception:
-                        pass
-
-        # Load trigger key
-        trigger_key = data.get("trigger_key")
-        valid_keycodes = [opt[0] for opt in self.HOTKEY_OPTIONS]
-        if isinstance(trigger_key, int) and trigger_key in valid_keycodes:
-            state["trigger_key"] = trigger_key
-
-        voice_idle_timeout_seconds = data.get("voice_idle_timeout_seconds")
-        if isinstance(voice_idle_timeout_seconds, int) and voice_idle_timeout_seconds in (0, 10, 15, 20, 25, 30):
-            state["voice_idle_timeout_seconds"] = voice_idle_timeout_seconds
-
-        # Load pipe slots (support both old string format and new dict format)
-        pipe_slots = data.get("pipe_slots")
-        if isinstance(pipe_slots, list) and len(pipe_slots) == 5:
-            converted = []
-            for s in pipe_slots:
-                if isinstance(s, dict) and "title" in s and "prompt" in s:
-                    converted.append({"title": s["title"], "prompt": s["prompt"]})
-                elif isinstance(s, str):
-                    # Migrate old format: use first 20 chars as title
-                    title = s[:20] + "..." if len(s) > 20 else s
-                    converted.append({"title": title, "prompt": s})
-                else:
-                    converted.append({"title": "", "prompt": ""})
-            state["pipe_slots"] = converted
-        else:
-            import copy
-            state["pipe_slots"] = copy.deepcopy(self.DEFAULT_PIPE_SLOTS)
-
-        # Load current correction slot
-        current_slot = data.get("current_pipe_slot")
-        if isinstance(current_slot, int) and -1 <= current_slot <= 4:
-            state["current_pipe_slot"] = current_slot
-        else:
-            state["current_pipe_slot"] = -1
-
-        return state
+        if isinstance(data.get("sound_enabled"), bool):
+            default["sound_enabled"] = data["sound_enabled"]
+        return default
 
     def save(
-        self,
-        current_service,
-        sound_enabled,
-        dedicated_windows,
-        trigger_key=None,
-        voice_idle_timeout_seconds=None,
-        pipe_slots=None,
-        current_pipe_slot=None,
-    ):
+        self, hotkey: str, chatgpt_window: tuple[int, int] | None, sound_enabled: bool
+    ) -> None:
+        if hotkey not in HOTKEYS:
+            raise ValueError("unsupported hotkey")
         payload = {
-            "current_service": current_service,
-            "sound_enabled": sound_enabled,
-            "dedicated_windows": {
-                "ChatGPT": list(dedicated_windows.get("ChatGPT"))
-                if dedicated_windows.get("ChatGPT")
-                else None,
-                "Gemini": list(dedicated_windows.get("Gemini"))
-                if dedicated_windows.get("Gemini")
-                else None,
-            },
-            "trigger_key": trigger_key if trigger_key is not None else self.DEFAULT_TRIGGER_KEY,
-            "voice_idle_timeout_seconds": (
-                voice_idle_timeout_seconds
-                if voice_idle_timeout_seconds is not None
-                else self.DEFAULT_VOICE_IDLE_TIMEOUT_SECONDS
-            ),
-            "pipe_slots": pipe_slots if pipe_slots is not None else self.DEFAULT_PIPE_SLOTS.copy(),
-            "current_pipe_slot": current_pipe_slot if current_pipe_slot is not None else -1,
+            "hotkey": hotkey,
+            "chatgpt_window": list(chatgpt_window) if chatgpt_window else None,
+            "sound_enabled": bool(sound_enabled),
         }
+        self.path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        os.chmod(self.path.parent, 0o700)
+        temp_path: str | None = None
         try:
-            parent = os.path.dirname(self.path)
-            if parent:
-                os.makedirs(parent, exist_ok=True)
-            with open(self.path, "w", encoding="utf-8") as f:
-                json.dump(payload, f, ensure_ascii=True)
-        except Exception as e:
-            self._log(f"Failed to save state: {e}")
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=self.path.parent,
+                prefix=f".{self.path.name}.",
+                delete=False,
+            ) as handle:
+                temp_path = handle.name
+                json.dump(payload, handle, sort_keys=True)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temp_path, 0o600)
+            os.replace(temp_path, self.path)
+        finally:
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)

@@ -9,4 +9,3 @@ dist/
 pip-wheel-metadata/
 .agent/
 plans/
-tests/

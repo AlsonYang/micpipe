@@ -1,26 +1,15 @@
-[build-system]
-requires = ["setuptools>=68.0"]
-build-backend = "setuptools.build_meta"
-
 [project]
 name = "micpipe"
-version = "1.5.1"
-description = "Voice-to-text utility for ChatGPT using global hotkeys"
+version = "2.0.0"
+description = "System-wide macOS access to ChatGPT Web Dictate"
 readme = "README.md"
-requires-python = ">=3.11"
+license = "GPL-3.0-only"
+requires-python = ">=3.11,<3.15"
 dependencies = [
-    "pynput>=1.8.1",
-    "pyobjc-framework-cocoa>=12.1",
-    "pyobjc-framework-quartz>=12.1",
-    "pyperclip>=1.11.0",
-    "rumps>=0.4.0",
+    "pyobjc-framework-cocoa==12.1",
+    "pyobjc-framework-quartz==12.1",
+    "rumps==0.4.0",
 ]
 
-[project.scripts]
-micpipe = "micpipe:main"
-
-[project.optional-dependencies]
-dev = ["py2app>=0.28.8"]
-
-[tool.setuptools]
-py-modules = ["micpipe", "main", "chrome_script", "clipboard_guard", "paste_tool", "slot_editor", "state_manager"]
+[tool.uv]
+package = false

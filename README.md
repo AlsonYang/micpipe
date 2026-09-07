@@ -1,268 +1,115 @@
-<img src="assets/logo.png" width="256">
+# MicPipe — personal ChatGPT Dictate bridge
 
-# MicPipe 
+MicPipe is a small macOS menu-bar utility that makes **ChatGPT Web's own Dictate feature** available in other applications. It does not contain a speech model, call an STT API directly, inspect cookies, or read ChatGPT conversations.
 
-Current version: `v1.5.1`
+This fork intentionally supports only ChatGPT Dictate in Google Chrome.
 
-https://github.com/user-attachments/assets/24bebfb3-8877-42ca-848e-5d55beef4244
+## Behavior
 
-[中文](README.zh-CN.md)
+1. Double-tap **Option (⌥)** to start dictation.
+2. Speak while continuing to work in the original app.
+3. Double-tap Option again to stop.
+4. MicPipe waits for a fresh ChatGPT transcription, clears it from the ChatGPT composer, restores the original app, and pastes it.
+5. The dictated text remains on the clipboard. The previous clipboard is not read or restored.
+6. Press **Esc** to cancel without changing the clipboard or pasting.
 
-> ⚠️ **Actively evolving**: Core functionality has been validated, but some edge cases and stability still need improvement. Feedback, code contributions, and a Star are very welcome.
-
-> **Tip**: Before using MicPipe, sign in to ChatGPT in Chrome to ensure the built-in voice dictation works properly.
-
-## Overview
-
-MicPipe is a small macOS utility that lets you use ChatGPT's web-based voice dictation feature directly within any application.
-
-
-### Key features
-- **Dictation, two trigger styles**: Use **hold to speak** or **click to toggle** for one-shot speech-to-text
-- **AI Pipe for dictation**: Automatically post-process transcribed text through AI using preset prompts such as Grammar Fix, Email Writer, and Vibe Coder
-- **Direct AI mode for dictation**: Send spoken input to the AI without a preset prompt when you want free-form commands instead of a fixed rewrite step
-- **Editable dictation slots**: Customize titles and prompts for up to 5 processing slots directly from the menu
-- **Realtime voice chat**: Press **Control + Fn** to start ChatGPT's realtime voice conversation mode. Press **Fn** again or **Esc** to end.
-- **Customizable dictation hotkey**: Select your preferred trigger key from the menu (defaults to Fn)
-- **Invisible dedicated window**: The service runs in a hidden Chrome window to reduce flickering and avoid interfering with your normal browsing
-- **Press Esc to cancel dictation**: Cancel recording without pasting anything
-- **State persistence**: Your settings (chosen service, sound, hotkey, and custom AI prompts) are automatically saved and restored on startup
-- **Clipboard preservation**: Automatically restores your original clipboard content after pasting
-
-### How it works
-
-MicPipe does not implement its own speech recognition or voice engine. Instead, it keeps a dedicated hidden Chrome window pointed at ChatGPT and programmatically clicks the same two ChatGPT controls you would click yourself:
-
-- **Dictate** for one-shot speech-to-text
-- **Voice** for realtime voice conversation
-
-That is the core idea of the app: reuse ChatGPT's existing web UI, but make it available system-wide through a lightweight macOS menu bar app and global shortcuts.
-
-<img src="demo/chatgpt-ui.png" width="900" alt="ChatGPT composer with the Dictate and Voice buttons highlighted">
-
-MicPipe then handles the desktop glue around those actions: managing the hidden window, triggering the right button at the right time, pasting transcribed text back into your current app, and preserving your clipboard.
-
+The hotkey is configurable from the menu-bar icon: either Option key (default), left Option, right Option, or Fn. Every choice requires a double-tap. Ordinary Option-key combinations do not trigger MicPipe.
 
 ## Requirements
 
-- macOS 10.14+
-- Python 3.11+
-- Google Chrome (must enable JavaScript from Apple Events, see below)
-
-## Quick Start
-
-### Option 1: Command Launch (Recommended)
-Double-click **`MicPipe.command`**. This script will launch the app in the background and automatically close the terminal window. It is the most reliable way to ensure the app has necessary permissions.
-
-### Option 2: Manual Launch
-```bash
-uv sync
-uv run python micpipe.py
-```
-
-## Installation
-
-### 1. Install dependencies
-
-- Python 3.11+
+- macOS
+- Python 3.11–3.14
+- [uv](https://docs.astral.sh/uv/) already installed
 - Google Chrome
-- `uv` (Python package manager)
+- A ChatGPT account for which Dictate works on `https://chatgpt.com`
 
-Then initialize the project environment:
+## First-time setup
 
-```bash
-uv sync
-```
+### 1. Install ChatGPT as a Chrome web app (recommended)
 
-### 2. Configure Chrome (important)
+1. Open `https://chatgpt.com` in Chrome and sign in.
+2. Use Chrome's **Install** icon in the address bar, or **⋮ → Cast, save, and share → Install page as app** (the wording varies by Chrome version).
+3. Name it `ChatGPT` and install it.
+4. Open that installed app and leave it on the normal ChatGPT composer page.
 
-Enable **Allow JavaScript from Apple Events** in Chrome:
+A normal dedicated Chrome window also works. The installed app is recommended because it is easier to keep isolated from unrelated browsing. MicPipe does not install a browser extension and does not create or export a separate browser profile.
 
-1. Open Chrome
-2. Go to menu bar: **View** → **Developer** → **Allow JavaScript from Apple Events**
-3. Make sure this option is checked ✓
+### 2. Install reviewed, locked dependencies
 
-> ⚠️ If you don't see this option, ensure you're using the official Google Chrome (not Chromium).
-
-### 3. Run the app
-
-- **MicPipe.command**: Double-click to run. This script handles permissions more reliably and will auto-close the terminal window once the app is running in the background (recommended).
-- **Terminal**: Run `uv run python micpipe.py`.
-
-> **Note for first-time use**: Since this is an unsigned app, macOS might block it. If so, **Right-click** `MicPipe.command` and select **Open**, then click **Open** again in the warning dialog.
-
-## Usage
-
-MicPipe uses the **Fn key** to trigger recording, with two operation modes:
-
-### Hold Mode (hold to speak)
-
-1. **Hold Fn** to start recording (menu bar icon turns red)
-2. Speak...
-3. **Release Fn** to stop and transcribe
-4. Transcribed text is automatically pasted into the original app
-
-### Toggle Mode (click to toggle)
-
-1. **Quick tap Fn** to start recording
-2. Speak...
-3. **Tap Fn again** to stop and transcribe
-4. Transcribed text is automatically pasted into the original app
-
-### Voice Conversation (ChatGPT only)
-
-1. Press **Control+Fn** to start a real-time voice conversation with ChatGPT
-2. ChatGPT will listen and respond with voice — no text pasting involved
-3. Press **Fn** again or **Esc** to end the conversation
-
-> ⚠️ Voice Conversation requires **ChatGPT Plus** and is only available when the service is set to ChatGPT.
-
-### Voice CLI
-
-Use the CLI when you want to trigger voice mode from **Shortcuts** or **Siri**:
+From this repository:
 
 ```bash
-uv run micpipe voice start
-uv run micpipe voice stop
-uv run micpipe voice toggle
+uv sync --frozen
 ```
 
-For automation, prefer **`start`** and **`stop`** because they are idempotent. `toggle` is mainly useful for manual scripting.
+`uv.lock` pins package files and hashes. The normal launcher never installs or updates dependencies.
 
-For **Shortcuts** on macOS, the simplest setup is:
+### 3. Enable required permissions/settings
 
-1. Create one shortcut named `Start ChatGPT Voice`
-2. Create another shortcut named `Stop ChatGPT Voice`
-3. In each shortcut, add **Run Shell Script**
-4. Use a script like this:
+These steps broaden local control and should be performed deliberately:
+
+1. In Chrome, enable **View → Developer → Allow JavaScript from Apple Events**.
+2. Start MicPipe once with `uv run --frozen python micpipe.py`; macOS may request **Accessibility** and **Automation → Google Chrome** access for the terminal application that launched it.
+3. In the installed ChatGPT app, start Dictate manually once and allow **Microphone** access for Chrome when prompted.
+4. Restart MicPipe after changing permissions.
+
+See [SECURITY.md](SECURITY.md#required-capabilities-and-revocation) for exact scope, risks, verification, narrower alternatives, and revocation.
+
+### 4. Bind the controlled window
+
+1. Bring the installed ChatGPT app/window to the front.
+2. Click the MicPipe menu-bar icon.
+3. Choose **Use Front ChatGPT Window**.
+
+MicPipe stores only the Chrome window ID and tab index. It then refuses to execute page JavaScript if that tab leaves the exact `https://chatgpt.com` origin. If the installed app is recreated and its ID changes, bind it again.
+
+## Launch and quit
+
+After setup, either double-click `MicPipe.command` or run:
 
 ```bash
-cd path-to-micpipe
-path-to-micpipe/.venv/bin/python path-to-micpipe/micpipe.py voice start
+uv run --frozen python micpipe.py
 ```
 
-or for stop:
+Quit from **MicPipe → Quit MicPipe**. Launch-at-login is not installed or enabled.
+
+## Privacy and local files
+
+- Settings: `~/Library/Application Support/MicPipe/micpipe_state.json` (mode `0600`)
+- Launcher log: `~/Library/Logs/MicPipe/micpipe.log`
+- Dictation text is not written to settings or logs.
+- Dictation text is sent only through ChatGPT's normal web functionality and copied to the local macOS clipboard/destination app.
+- No telemetry, analytics, crash upload, remote logging, or update check is present.
+
+## Failure behavior
+
+MicPipe does not paste when the bound window is missing, the host changes, the composer already has a draft, a selector is missing, recording cannot be verified, transcription times out, the transcript is empty, or the operation is cancelled. If the original app closes or cannot regain focus, the transcript is copied to the clipboard but is not pasted.
+
+A pre-existing ChatGPT composer draft is never silently cleared. Clear it yourself or use another bound window.
+
+## Updating after ChatGPT UI changes
+
+All ChatGPT DOM selectors and browser scripts are in [`chrome_script.py`](chrome_script.py). See [`MAINTENANCE.md`](MAINTENANCE.md) for selector diagnosis and the review-only upstream update workflow.
+
+## Development and tests
 
 ```bash
-cd path-to-micpipe
-path-to-micpipe/.venv/bin/python path-to-micpipe/micpipe.py voice stop
+uv run --frozen python -m unittest discover -s tests -v
+uv run --frozen python -m compileall -q .
 ```
 
-5. Say the shortcut name directly to Siri
+Tests mock Chrome/macOS boundaries; they do not prove that the current live ChatGPT UI or microphone works.
 
-MicPipe must already be running in the menu bar for these commands to work.
+## Uninstall
 
-### Cancel Recording
-
-- Press **Esc** during recording to cancel
-- Canceling will not paste any text
-
-### Menu Bar Icon Status
-
-- 🎙️ Microphone icon: Idle
-- 🔴 Pulsing red: Recording / dictation in progress
-- 🟣 Pulsing voice icon: ChatGPT realtime voice conversation is active
-- ⚙️ Circle icon: Transcribing
-
-Click the menu item to toggle sound cues.
-
-<p align="left">
-  <img src="demo/screenshot-menu-ai-pipe.png" width="600" alt="AI Pipe">
-</p>
-
-
-### Custom Hotkey
-
-You can choose your preferred trigger key directly from the menu:
-
-1. Click the **MicPipe** icon in the menu bar.
-2. Go to **Hotkey**.
-3. Select from supported keys: **Fn**, **Left/Right Option**, or **Left/Right Shift**.
-
-The setting is saved automatically and takes effect immediately.
- 
-## AI Pipe (AI Post-Processing)
-
-AI Pipe allows you to automatically process your voice transcription through AI before pasting it. You can use it to fix grammar, rewrite text into a formal email, or organize coding instructions.
- 
-> ⚠️ **Note**: Currently, AI Pipe features (including Conversation Mode and Preset Prompts) are only supported for **ChatGPT**. Gemini currently only supports standard voice-to-text.
-
-### How to Use
-
-1. Click the **MicPipe** icon → **AI Pipe**
-2. Select your preferred mode:
-   - **Off**: Standard voice-to-text with no AI processing.
-   - **Conversation Mode**: Sends your voice directly to the AI as a request or command.
-   - **Slot 1-5 (Presets)**: Uses a pre-defined prompt to process your text.
-
-### Customizing Your Presets
-
-You can customize the 5 preset prompts to fit your needs:
-
-1. In the **AI Pipe** menu, hover over the slot you want to change.
-2. Select **✎ Edit...**.
-3. A standalone editor will open where you can change the **Title** and the **Prompt**.
-4. Save your changes, and they will be applied automatically to your next recording.
-
-## Service Selection (ChatGPT / Gemini)
-
-You can switch between transcription services via the menu bar:
-
-1. Click the **MicPipe** icon in the menu bar.
-2. Go to **Service**.
-3. Select **ChatGPT** or **Gemini**.
-
-- **ChatGPT**: Supports full features including "Cancel" (Esc).
-- **Gemini**: Supports dictation, but does not currently support the "Cancel" (Esc) key due to technical limitations of the Gemini web interface.
-
-## Permissions (important)
-
-The following permissions are required on first run:
-
-### 1. Accessibility (required)
-
-- **Purpose**: Listen for Fn hotkey, simulate `Cmd+V` paste
-- **Location**: System Settings → Privacy & Security → Accessibility
-- Add and enable the terminal app running MicPipe (e.g., Terminal, iTerm2)
-
-### 2. Automation > Google Chrome (required)
-
-- **Purpose**: Control the ChatGPT tab in Chrome via AppleScript
-- **Location**: System Settings → Privacy & Security → Automation
-- Ensure your terminal app has permission to control Google Chrome
-
-### 3. Microphone (required in Chrome)
-
-- **Purpose**: ChatGPT dictation requires microphone access
-- **Location**: Chrome will prompt for permission on first use; click Allow
-
-## How it works (technical)
-
-- Captures the frontmost app at the moment recording starts.
-- One hotkey, two behaviors: **Hold Fn** to record (hold mode), **release Fn** to stop (auto transcribe).
-- Uses AppleScript/JavaScript to control the ChatGPT tab in Chrome:
-  - Click “Dictate” to start
-  - Click “Submit Dictation” to stop and retrieve text
-  - Click “Stop Dictation” to cancel on Esc
-- Restores focus to the original app and simulates `Cmd+V` to paste.
-- A short WAV sound is played on start/stop when enabled.
-
-### Why this approach?
-
-We explored several technical paths before settling on the current AppleScript bridge:
-- **Option A: CDP (Chrome DevTools Protocol)** — Failed. ChatGPT's anti-bot protection (Cloudflare/Turnstile) detects CDP and triggers verification challenges, preventing regular usage.
-- **Option B: Headless Browsers (Puppeteer/Playwright)** — Failed. The main blocker is the **inability to access the microphone** in headless mode, along with bot detection issues.
-
-**The Solution**: Using AppleScript to interact with your daily Google Chrome window.
-- **Pros**: It leverages your existing login session and microphone permissions in a real browser environment, effectively bypassing bot detection.
-- **Limitation**: Because it relies heavily on macOS-specific AppleScript and Quartz APIs, this project is **not cross-platform**. Implementations for Linux or Windows would require separate developement based on similar automation principles.
-
-## Compatibility
-
-- macOS 10.14+
-- Python 3.11+
-- Google Chrome
+1. Quit MicPipe.
+2. Remove this repository and optionally these local files:
+   ```bash
+   rm -rf "$HOME/Library/Application Support/MicPipe" "$HOME/Library/Logs/MicPipe"
+   ```
+3. Remove the installed ChatGPT app through Chrome if desired.
+4. Revoke permissions/settings using [SECURITY.md](SECURITY.md#reversal).
 
 ## License
 
-This project is licensed under the **GNU General Public License v3 (GPLv3)**. See the [LICENSE](LICENSE) file for details.
+GPL-3.0-only. The upstream license is retained in [`LICENSE`](LICENSE).

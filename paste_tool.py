@@ -1,27 +1,38 @@
-import subprocess
+"""Local clipboard write and paste. The dictated text intentionally remains."""
+
+from __future__ import annotations
+
 import time
 
-from clipboard_guard import overwrite_clipboard_with_text, restore_clipboard
+import Quartz
+from AppKit import NSPasteboard
 
-def paste_text(text, snapshot=None):
-    """Put text into clipboard, simulate Cmd+V, then restore clipboard."""
-    if not text or text == "SUCCESS" or text == "CHATGPT_NOT_FOUND":
-        return
 
-    try:
-        # 1. Put into clipboard
-        overwrite_clipboard_with_text(text)
-        time.sleep(0.03)  # Give the system a bit of response time
+def write_clipboard(text: str) -> int:
+    if not text:
+        raise ValueError("refusing to copy empty text")
+    pasteboard = NSPasteboard.generalPasteboard()
+    pasteboard.clearContents()
+    if not pasteboard.writeObjects_([text]):
+        raise RuntimeError("could not write dictated text to the clipboard")
+    return int(pasteboard.changeCount())
 
-        # 2. Simulate Command + V via AppleScript
-        script = r'''
-        tell application "System Events"
-          keystroke "v" using {command down}
-        end tell
-        '''
-        subprocess.run(["osascript", "-e", script], check=True)
-    finally:
-        # 3. Restore clipboard (best-effort)
-        time.sleep(0.05)
-        if snapshot is not None:
-            restore_clipboard(snapshot)
+
+def paste_text(text: str, settle_seconds: float = 0.05) -> None:
+    """Replace the clipboard with text and synthesize Cmd+V.
+
+    No clipboard content is read, logged, persisted, or restored.
+    """
+    expected_change = write_clipboard(text)
+    time.sleep(settle_seconds)
+    if int(NSPasteboard.generalPasteboard().changeCount()) != expected_change:
+        raise RuntimeError(
+            "clipboard changed before paste; refusing to paste unknown content"
+        )
+    source = Quartz.CGEventSourceCreate(Quartz.kCGEventSourceStateCombinedSessionState)
+    key_down = Quartz.CGEventCreateKeyboardEvent(source, 9, True)  # virtual key V
+    key_up = Quartz.CGEventCreateKeyboardEvent(source, 9, False)
+    Quartz.CGEventSetFlags(key_down, Quartz.kCGEventFlagMaskCommand)
+    Quartz.CGEventSetFlags(key_up, Quartz.kCGEventFlagMaskCommand)
+    Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, key_down)
+    Quartz.CGEventPost(Quartz.kCGAnnotatedSessionEventTap, key_up)
